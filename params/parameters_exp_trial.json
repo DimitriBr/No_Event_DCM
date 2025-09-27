@@ -1,0 +1,7 @@
+{
+    "_coment" : "frames params are set for 60 Hz screen",
+    "trial_duration__frames" : 360,
+    "stimulus_duration__frames" : 6,
+    "no_stimulus_interval_front__frames" : 60,
+    "no_stimulus_interval_back__frames" : 60
+}

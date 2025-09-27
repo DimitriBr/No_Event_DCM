@@ -1,0 +1,5 @@
+{
+    "question_icon_text" : "Seen?",
+    "response_buttons" : ["q", "z"],
+    "response_labels" : ["yes", "no"]
+}

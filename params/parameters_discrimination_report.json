@@ -1,0 +1,5 @@
+{
+    "question_icon_text" : "L or R?",
+    "response_buttons" : ["o", "m"],
+    "response_labels" : ["left", "right"]
+}

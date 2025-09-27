@@ -1,0 +1,6 @@
+{
+    "beta_0" : 0.9,
+    "beta_increment" : 0.01,
+    "inter_round_waiting__s" : 0.5,
+    "calibration_type" : "checkerboard"
+}
