@@ -1,0 +1,12 @@
+{
+    "gabor" : "stimuli/gabor.png",
+
+    "E_down_left" : "stimuli/shape_E/E_down_lEye.pcx",
+    "E_down_right" : "stimuli/shape_E/E_down_rEye.pcx",
+    "E_up_left" : "stimuli/shape_E/E_up_lEye.pcx",
+    "E_up_right" : "stimuli/shape_E/E_up_rEye.pcx",
+    "E_left_left" : "stimuli/shape_E/E_left_lEye.pcx",
+    "E_left_right" : "stimuli/shape_E/E_left_rEye.pcx",
+    "E_right_left" : "stimuli/shape_E/E_right_lEye.pcx",
+    "E_right_right" : "stimuli/shape_E/E_right_rEye.pcx"
+}

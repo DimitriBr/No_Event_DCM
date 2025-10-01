@@ -1,51 +1,82 @@
+from pathlib import Path
+
 from PIL import Image, ImageOps, ImageFilter
+import numpy as np
 
 
 def prepare_image(
-    input_path: str,
-    output_path: str,
+    input_path: Path,
     m: int,
-    blur_radius: float,
-    new_background_color_rgb255=(255, 255, 255),  # "white" replacement
-    new_object_color_rgb255=(0, 0, 0),  # "black" replacement
-):
+    red_rgb255 : tuple,  
+    green_rgb255: tuple,  
+    output_path: Path | None = None,
+    ori: int | None = None 
+) -> dict:
     """
     Preparing an image to be displayed in a DCM experiment as folows:
     1. Loading image on a transparent or white background.
     2. Making visible pixels grayscale, background white (temporaly colors).
     3. Stretching to fit m×m square.
     4. Applying Gaussian smoothing with a specified radius.
-    5. Dithering to black & white.
+    5. Dithering to black & white
     6. Repainting white to color_background, black to color_object.
+
+    If ori is not None, the relative size of the stimulus on the background would be normalized to allow 
+        the full display of the stimulus with all possible degrees of rotation. 
     """
 
-    img = Image.open(input_path).convert("RGBA")
-    r, g, b, alpha = img.split()
+    stim: Image = Image.open(input_path).convert("RGBA")
+    _r, _g, _b, alpha = stim.split()
 
-    gray = img.convert("L") # to graysclae
-    white_canvas = Image.new("L", img.size, 255) 
-    img_composite = Image.composite(gray, white_canvas, alpha)  # alpha as transparency mask
+    stim= stim.convert("L")  # to graysclale
+    white_bg = Image.new("L", stim.size, 255)
+    img = Image.composite(stim, white_bg, alpha)
 
-    img_resized = img_composite.resize((m, m), Image.Resampling.LANCZOS)
+    if ori is not None:
+        m_normalized = int(m/np.sqrt(2))
+        img = img.resize((m_normalized, m_normalized), Image.Resampling.LANCZOS)
+        offset = ((m - m_normalized)//2, (m-m_normalized)//2)
 
+        canvas = Image.new("L", (m,m), 255)
+        canvas.paste(img, offset)
+        canvas = canvas.rotate(ori, expand = False, fillcolor = 255)
+    elif ori is None:
+        canvas = img
+
+    blur_radius = round(m/100)
     filter_for_blurring = ImageFilter.GaussianBlur(blur_radius)
-    img_blurred = img_resized.filter(filter_for_blurring)
+    canvas = canvas.filter(filter_for_blurring)
 
-    bw = img_blurred.convert("1")  # dithering
+    bw = canvas.convert("1")  # dithering
+    print("A", bw.size)
 
-    final_image = ImageOps.colorize(
-        bw.convert("L"), white=new_background_color_rgb255, black=new_object_color_rgb255
+    red_bg_image = ImageOps.colorize(
+        bw.convert("L"),
+        black=green_rgb255,
+        white=red_rgb255,
+    )
+    green_bg_image = ImageOps.colorize(
+        bw.convert("L"),
+        black=red_rgb255,
+        white=green_rgb255,
     )
 
-    final_image.save(output_path)
+    stim_images = {"red" : red_bg_image, "green" : green_bg_image}
+    #saving an example of final image 
+    if output_path is not None:
+        green_bg_image.save(output_path)
+
+    return stim_images
 
 
 if __name__ == "__main__":
     prepare_image(
-        input_path="gabor.png",
-        output_path="output.png",
+        input_path=Path("stimuli") / "gabor.png",
+        output_path=Path("output.png"),
         m=175,
-        blur_radius=2,
-        new_background_color_rgb255=(150, 110, 0),
-        new_object_color_rgb255=(110, 150, 0),
+        red_rgb255=(150, 110, 0),
+        green_rgb255=(110, 150, 0),
+        ori = 0
     )
+
+#blur radius should be one 

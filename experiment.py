@@ -3,7 +3,7 @@ import random
 
 from psychopy import visual, colors, event, core
 
-from trials import DCF_Trial
+from trials import DCM_Trial, Stereo_Trial, Inter_Trial_Interval
 from misc import Participant, Parameters, Calibrator
 
 
@@ -20,62 +20,6 @@ class Experiment:
 
         self.betas_calibration = {}
         self.betas_fitted = {i: 0.9 for i in range(15)}  # CHANGE TO OTHER DEFAULT TODO
-
-        # Special block for generating DCF canvas: fixation cross and empty square frames:
-        self.canvas_DCF = []
-        square__center_positions = {
-            "left": (
-                -int(
-                    params.visual_params["inter_square_distance__degrees"]
-                    * params.px_per_deg
-                    / 2
-                    + params.visual_params["square_size__degrees"]
-                    * params.px_per_deg
-                    / 2
-                ),
-                0,
-            ),
-            "right": (
-                int(
-                    params.visual_params["inter_square_distance__degrees"]
-                    * params.px_per_deg
-                    / 2
-                    + params.visual_params["square_size__degrees"]
-                    * params.px_per_deg
-                    / 2
-                ),
-                0,
-            ),
-        }
-        for side in ["left", "right"]:
-            square_frame = visual.Rect(
-                units="pix",
-                win=self.window,
-                width=params.visual_params["square_size__degrees"] * params.px_per_deg,
-                height=params.visual_params["square_size__degrees"] * params.px_per_deg,
-                pos=square__center_positions[side],
-                lineColor=params.frame_color,
-                lineWidth=params.visual_params["square_size__degrees"]
-                * 0.01
-                * params.visual_params["frame_thickness__percent"]
-                * params.px_per_deg,
-                interpolate=True,
-            )
-            self.canvas_DCF.append(square_frame)
-
-            fixation_cross = visual.TextBox2(
-                units="pix",
-                win=self.window,
-                alignment="center",
-                text="+",
-                letterHeight=int(
-                    params.visual_params["fixation_cross_size__degrees"]
-                    * params.px_per_deg
-                ),
-                pos=square__center_positions[side],
-                color=params.frame_color,
-            )
-            self.canvas_DCF.append(fixation_cross)
 
     def _insert_inter_trial_interval(self, inter_trial_interval):
         for visual in self.canvas_DCF:
@@ -145,52 +89,57 @@ class Experiment:
             with open((calibration_data_path / f"betas_fitted.json"), "w") as f:
                 json.dump(self.betas_fitted, f, indent=4)
 
-    def run_contrast_adaptation_block(self):
+    def run_contrast_adaptation_block(self, block_code):
         trial_indexer = 0
         for contrast_level in self.params.contrast_practise_params["contrast_levels"]:
             for _itrial in range(
                 self.params.contrast_practise_params["trials_per_level"]
             ):
-                con_prac_trial = DCF_Trial(
-                    index=str(f"Practice_{trial_indexer}"),
+                con_prac_trial = DCM_Trial(
+                    index=str(f"{block_code}_{trial_indexer}"),
                     window=self.window,
-                    data_folder=self.participant.path / "practice_trials",
-                    max_duration=self.params.contrast_practise_params[
-                        "max_trial_duration__frames"
-                    ],
-                    termination_buttons=["left", "right"],
-                    detection_judgement_routine=False,
-                    discrimination_judgement_routine=False,
-                    contrast_level=contrast_level,
-                    gabor_orientation=random.choice(["left", "right"]),
-                    red_colors=self.params.red_colors,
-                    green_colors=self.params.green_colors,
-                    betas=self.betas_fitted,
-                    color_mode=random.choice(["red", "green"]),
-                    stimulus_mode="gabor",
+                    data_folder=self.participant.path / block_code,
                     square_size=int(
-                        self.params.visual_params["square_size__degrees"]
-                        * self.params.px_per_deg
-                    ),
-                    inter_square_distance=int(
-                        self.params.visual_params["inter_square_distance__degrees"]
-                        * self.params.px_per_deg
-                    ),
-                    grating_resolution=128,
-                    canvas_DCF=self.canvas_DCF,
+                    self.params.visual_params["square_size__degrees"]
+                    * self.params.px_per_deg
+                ),
+                inter_square_distance=int(
+                    self.params.visual_params["inter_square_distance__degrees"]
+                    * self.params.px_per_deg
+                ),
+                frame_color=self.params.frame_color,
+                frame_thickness=self.params.visual_params["frame_thickness__percent"],
+                fixation_cross_size=int(
+                    self.params.visual_params["fixation_cross_size__degrees"]
+                    * self.params.px_per_deg
+                ),
+                max_trial_duration=self.params.contrast_practise_params[
+                    "max_trial_duration__frames"
+                ],
+                stimulus_source=self.params.stimuli_codes["gabor"],
+                stimulus_duration=self.params.contrast_practise_params[
+                    "max_trial_duration__frames"
+                ],
+                stimulus_onset=0,
+                detection_judgement_routine=None,
+                discrimination_judgement_routine=None,
+                termination_buttons=["left", "right"],
+                color_mode=random.choice(["red", "green"]),
+                stimulus_orientation=random.choice(["left", "right"]),
+                contrast_level=contrast_level,
+                red_colors=self.params.red_colors,
+                green_colors=self.params.green_colors,
+                betas=self.betas_fitted,
                 )
 
-                con_prac_trial.generate_visuals()
+                con_prac_trial.process_stimuli()
                 con_prac_trial.run()
                 con_prac_trial.save_data()
                 trial_indexer += 1
 
-                self._insert_inter_trial_interval(
-                    self.params.contrast_practise_params["inter_trial_interval__s"]
-                )
 
     def run_experimental_block(
-        self, block_code, n_trials, contrast_levels, color_modes
+        self, block_code, n_trials, contrast_levels, color_modes, detection_collection, discrimination_collection
     ):
         if len(color_modes) != n_trials:
             raise ValueError(
@@ -200,31 +149,23 @@ class Experiment:
             raise ValueError(
                 "the length of contrast_level specification list is not the same as the number of trials"
             )
+        
+        if detection_collection is True:
+            detection_info = self.params.detection_report_params
+        else:
+            detection_info = None 
+
+        if discrimination_collection is True:
+            discrimination_info = self.params.discrimination_report_params
+        else:
+            discrimination_info = None 
 
         for itrial in range(n_trials):
-            trial = DCF_Trial(
+
+            trial = DCM_Trial(
                 index=str(f"{block_code}_{itrial}"),
                 window=self.window,
                 data_folder=self.participant.path / block_code,
-                max_trial_duration=self.params.exp_trial_params["trial_duration__frames"],
-                termination_buttons=None,
-                stimulus_duration=self.params.exp_trial_params[
-                    "stimulus_duration__frames"
-                ],
-                stimulus_onset=random.randint(
-                    self.params.exp_trial_params["no_stimulus_interval_front__frames"],
-                    self.params.exp_trial_params["trial_duration__frames"]
-                    - self.params.exp_trial_params["no_stimulus_interval_back__frames"],
-                ),
-                contrast_level=contrast_levels[itrial],
-                detection_judgement_routine=self.params.detection_report_params,
-                discrimination_judgement_routine=self.params.discrimination_report_params,
-                gabor_orientation=random.choice(["left", "right"]),
-                red_colors=self.params.red_colors,
-                green_colors=self.params.green_colors,
-                betas=self.betas_fitted,
-                color_mode=color_modes[itrial],
-                stimulus_mode="gabor",
                 square_size=int(
                     self.params.visual_params["square_size__degrees"]
                     * self.params.px_per_deg
@@ -233,15 +174,116 @@ class Experiment:
                     self.params.visual_params["inter_square_distance__degrees"]
                     * self.params.px_per_deg
                 ),
-                grating_resolution=128,
-                canvas_DCF=self.canvas_DCF,
+                frame_color=self.params.frame_color,
+                frame_thickness=self.params.visual_params["frame_thickness__percent"],
+                fixation_cross_size=int(
+                    self.params.visual_params["fixation_cross_size__degrees"]
+                    * self.params.px_per_deg
+                ),
+                max_trial_duration=self.params.exp_trial_params[
+                    "trial_duration__frames"
+                ],
+                stimulus_source=self.params.stimuli_codes["gabor"],
+                stimulus_duration=self.params.exp_trial_params[
+                    "stimulus_duration__frames"
+                ],
+                stimulus_onset=random.randint(
+                    self.params.exp_trial_params["no_stimulus_interval_front__frames"],
+                    self.params.exp_trial_params["trial_duration__frames"]
+                    - self.params.exp_trial_params["no_stimulus_interval_back__frames"],
+                ),
+                detection_judgement_routine=detection_info,
+                discrimination_judgement_routine=discrimination_info,
+                termination_buttons=None,
+                color_mode=color_modes[itrial],
+                stimulus_orientation=random.choice(["left", "right"]),
+                contrast_level=contrast_levels[itrial],
+                red_colors=self.params.red_colors,
+                green_colors=self.params.green_colors,
+                betas=self.betas_fitted,
             )
 
-            trial.generate_visuals()
+            iti = Inter_Trial_Interval(
+                index=str(f"{block_code}_{itrial}"),
+                data_folder=self.participant.path / "inter_trial_intervals",
+                window=self.window,
+                duration=random.randint(
+                    self.params.exp_trial_params[
+                        "inter_trial_interval_lower_limit__frames"
+                    ],
+                    self.params.exp_trial_params[
+                        "inter_trial_interval_higher_limit__frames"
+                    ],
+                ),
+                square_size=int(
+                    self.params.visual_params["square_size__degrees"]
+                    * self.params.px_per_deg
+                ),
+                inter_square_distance=int(
+                    self.params.visual_params["inter_square_distance__degrees"]
+                    * self.params.px_per_deg
+                ),
+                frame_color=self.params.frame_color,
+                frame_thickness=self.params.visual_params["frame_thickness__percent"],
+                fixation_cross_size=int(
+                    self.params.visual_params["fixation_cross_size__degrees"]
+                    * self.params.px_per_deg
+                ),
+            )
+
+            ###### block sequence #####
+            trial.process_stimuli()
             trial.run()
             trial.collect_responses()
             trial.save_data()
+            iti.wait()
+            iti.save_data()
 
-            self._insert_inter_trial_interval(
-                self.params.exp_trial_params["inter_trial_interval__s"]
+    def run_stereo_adaptation_block(self, block_code, n_trials_max):
+
+        progress_tracker = []
+        for itrial in range(n_trials_max):
+            stimulus_direction = random.choice(["left", "right", "up", "down"])
+            stimuli = [
+                self.params.stimuli_codes[f"E_{stimulus_direction}_{side}"]
+                for side in ["left", "right"]
+            ]
+            trial = Stereo_Trial(
+                index=str(f"{block_code}_{itrial}"),
+                stimulus_index = stimulus_direction,
+                window=self.window,
+                data_folder=self.participant.path / block_code,
+                square_size=int(
+                    self.params.visual_params["square_size__degrees"]
+                    * self.params.px_per_deg
+                ),
+                inter_square_distance=int(
+                    self.params.visual_params["inter_square_distance__degrees"]
+                    * self.params.px_per_deg
+                ),
+                frame_color=self.params.frame_color,
+                frame_thickness=self.params.visual_params["frame_thickness__percent"],
+                fixation_cross_size=int(
+                    self.params.visual_params["fixation_cross_size__degrees"]
+                    * self.params.px_per_deg
+                ),
+                max_trial_duration=self.params.exp_trial_params[
+                    "trial_duration__frames"
+                ],
+                stimulus_source=stimuli,
+                termination_buttons=["left", "right", "up", "down"],
             )
+
+            ###### block sequence #####
+            trial.process_stimuli()
+            trial.run()
+            if trial.info["direction"] == trial.info["terminated_by"]:
+                progress_tracker.append(True)
+            else:
+                progress_tracker.append(False)
+            trial.save_data()
+
+            if len(progress_tracker) > 3:
+                if all(progress_tracker[-3:]):
+                    break
+

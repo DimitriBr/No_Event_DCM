@@ -1,6 +1,5 @@
 {
     "contrast_levels" : [14, 11, 5, 3, 1],
     "trials_per_level" : 3,
-    "max_trial_duration__frames" : 500,
-    "inter_trial_interval__s" : 0.5
+    "max_trial_duration__frames" : 500
 }

@@ -35,6 +35,7 @@ class Parameters:
         contrast_practise_params_file: Path,
         detection_report_params_file: Path,
         discrimination_report_params_file: Path,
+        stimuli_codes_file : Path,
         reds_values_file: Path,
         green_values_file: Path,
     ):
@@ -60,6 +61,9 @@ class Parameters:
 
         with open(params_folder / discrimination_report_params_file, "rb") as file:
             self.discrimination_report_params = json.load(file)
+
+        with open(params_folder / stimuli_codes_file, "rb") as file:
+            self.stimuli_codes = json.load(file)
 
         self.red_colors = pd.read_excel(params_folder / reds_values_file, header=None)
         self.green_colors = pd.read_excel(
