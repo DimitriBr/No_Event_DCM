@@ -13,16 +13,38 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from psychopy import visual, event, colors
 import numpy as np
 
+
 @dataclass
 class Participant:
     sbj_id: str
-    age: int
+    age: str
     gender: str
     handedness: str
+    vision: str
 
     @property
     def path(self):
         return Path("data") / self.sbj_id
+    
+    def create_participant_repo(self):
+        self.path.mkdir(exist_ok=True)
+
+    def save_demographical_info(self):
+        demographics = {
+            "id": self.sbj_id,
+            "age": self.age,
+            "gender": self.gender,
+            "handedness": self.handedness,
+            "vision": self.vision,
+        }
+
+        try:
+            age = int(self.age)
+        except:
+            raise ValueError("Age should be numeric")
+
+        with open((self.path / f"demographics.json"), "w") as f:
+            json.dump(demographics, f, indent=4)
 
 
 class Parameters:
@@ -30,12 +52,12 @@ class Parameters:
         self,
         screen_params_file: Path,
         visual_params_file: Path,
-        exp_trial_params_file : Path,
+        exp_trial_params_file: Path,
         calibration_params_file: Path,
         contrast_practise_params_file: Path,
         detection_report_params_file: Path,
         discrimination_report_params_file: Path,
-        stimuli_codes_file : Path,
+        stimuli_codes_file: Path,
         reds_values_file: Path,
         green_values_file: Path,
     ):
@@ -95,6 +117,7 @@ class Parameters:
     def frame_color(self):
         frame_color_rgb1 = self.visual_params["frame_rgb1"]
         return colors.Color(frame_color_rgb1, space="rgb1")
+
 
 class Calibrator:
     """
@@ -285,7 +308,7 @@ class Calibrator:
         )
 
 
-### old calibration version with tkinter 
+### old calibration version with tkinter
 def check_beta_plot_2(betas: dict) -> tuple[bool, dict]:
     experimenter_approved = dict(value=None)
 
@@ -334,3 +357,33 @@ def check_beta_plot_2(betas: dict) -> tuple[bool, dict]:
         bool(experimenter_approved["value"]),
         {i: betas_fitted[i] for i in contrast_list_ascending},
     )
+
+
+def get_gui_inputs(fields, gui_window_title):
+    """
+    Opens a tkinter window with text entry boxes for each field name.
+    Returns a dict {field_name: entered_text}.
+    """
+    responses = {}
+
+    def on_submit():
+        for field, entry in entries.items():
+            responses[field] = entry.get()
+        root.destroy()
+
+    root = tk.Tk()
+    root.title(gui_window_title)
+
+    entries = {}
+    for i, field in enumerate(fields):
+        label = tk.Label(root, text=field)
+        label.grid(row=i, column=0, padx=5, pady=5, sticky="e")
+        entry = tk.Entry(root, width=40)
+        entry.grid(row=i, column=1, padx=5, pady=5)
+        entries[field] = entry
+
+    submit_btn = tk.Button(root, text="Submit", command=on_submit)
+    submit_btn.grid(row=len(fields), column=0, columnspan=2, pady=10)
+
+    root.mainloop()
+    return responses

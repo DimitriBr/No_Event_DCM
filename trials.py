@@ -47,9 +47,9 @@ class Dichoptic_Trial(ABC):
         self.index = index
         self.window = window
         self.data_folder = data_folder
-        self.data_folder.mkdir(exist_ok=True)
         self.square_size = square_size
         self.inter_square_distance = inter_square_distance
+        self.frame_color = frame_color
         self.max_trial_duration = max_trial_duration
         self.stimulus_source = stimulus_source
         self.stimulus_duration = stimulus_duration
@@ -120,6 +120,7 @@ class Dichoptic_Trial(ABC):
         self.info["terminated_at"] = last_frame
 
     def save_data(self):
+        self.data_folder.mkdir(exist_ok=True)
         with open((self.data_folder / f"{self.index}.json"), "w") as f:
             json.dump(self.info, f, indent=4)
 
@@ -553,3 +554,62 @@ def generate_dichoptic_canvas(
         )
         dichoptic_canvas.append(fixation_cross)
     return dichoptic_canvas
+
+class Dichoptic_Text(Dichoptic_Trial):
+    def __init__(
+        self,
+        window: visual.Window,
+        square_size: int,
+        inter_square_distance: int,
+        frame_color: colors.Color,
+        frame_thickness: float,
+        fixation_cross_size: int,
+        termination_buttons: list,
+    ):
+        super().__init__(
+            index = None,
+            window = window,
+            data_folder = None,
+            square_size = square_size,
+            inter_square_distance=inter_square_distance,
+            frame_color=frame_color,
+            frame_thickness=frame_thickness,
+            fixation_cross_size=fixation_cross_size,
+            max_trial_duration = 9999,
+            stimulus_source = None,
+            stimulus_duration = None,
+            stimulus_onset = None,
+            detection_judgement_routine = None,
+            discrimination_judgement_routine = None,
+            termination_buttons = termination_buttons,
+        )
+
+    def process_stimuli(self, text):
+
+        upper_square_lining_positions = {
+            "left": (
+                -int(self.inter_square_distance / 2 + self.square_size / 2),
+                int(self.square_size / 4),
+            ),
+            "right": (
+                int(self.inter_square_distance / 2 + self.square_size / 2),
+                int(self.square_size / 4),
+            ),
+        }
+
+        for side in ["left", "right"]:
+            question_icon = visual.TextBox2(
+                    units="pix",
+                    win=self.window,
+                    alignment="center",
+                    text=text,
+                    letterHeight=int(self.square_size / 8),
+                    pos=upper_square_lining_positions[side],
+                    color=self.frame_color,
+                )
+            self.stimuli.append(question_icon)
+        
+
+    def collect_responses(self):
+        pass
+

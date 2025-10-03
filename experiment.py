@@ -3,14 +3,13 @@ import random
 
 from psychopy import visual, colors, event, core
 
-from trials import DCM_Trial, Stereo_Trial, Inter_Trial_Interval
+from trials import DCM_Trial, Stereo_Trial, Inter_Trial_Interval, Dichoptic_Text
 from misc import Participant, Parameters, Calibrator
 
 
 class Experiment:
     def __init__(self, participant: Participant, params: Parameters):
         self.participant = participant
-        self.participant.path.mkdir(exist_ok=True)
 
         self.params = params
 
@@ -89,57 +88,67 @@ class Experiment:
             with open((calibration_data_path / f"betas_fitted.json"), "w") as f:
                 json.dump(self.betas_fitted, f, indent=4)
 
-    def run_contrast_adaptation_block(self, block_code):
-        trial_indexer = 0
-        for contrast_level in self.params.contrast_practise_params["contrast_levels"]:
-            for _itrial in range(
-                self.params.contrast_practise_params["trials_per_level"]
-            ):
-                con_prac_trial = DCM_Trial(
-                    index=str(f"{block_code}_{trial_indexer}"),
-                    window=self.window,
-                    data_folder=self.participant.path / block_code,
-                    square_size=int(
-                    self.params.visual_params["square_size__degrees"]
-                    * self.params.px_per_deg
-                ),
-                inter_square_distance=int(
-                    self.params.visual_params["inter_square_distance__degrees"]
-                    * self.params.px_per_deg
-                ),
-                frame_color=self.params.frame_color,
-                frame_thickness=self.params.visual_params["frame_thickness__percent"],
-                fixation_cross_size=int(
-                    self.params.visual_params["fixation_cross_size__degrees"]
-                    * self.params.px_per_deg
-                ),
-                max_trial_duration=self.params.contrast_practise_params[
-                    "max_trial_duration__frames"
-                ],
-                stimulus_source=self.params.stimuli_codes["gabor"],
-                stimulus_duration=self.params.contrast_practise_params[
-                    "max_trial_duration__frames"
-                ],
-                stimulus_onset=0,
-                detection_judgement_routine=None,
-                discrimination_judgement_routine=None,
-                termination_buttons=["left", "right"],
-                color_mode=random.choice(["red", "green"]),
-                stimulus_orientation=random.choice(["left", "right"]),
-                contrast_level=contrast_level,
-                red_colors=self.params.red_colors,
-                green_colors=self.params.green_colors,
-                betas=self.betas_fitted,
-                )
+    # def run_contrast_adaptation_block(self, block_code):
+    #     trial_indexer = 0
+    #     for contrast_level in self.params.contrast_practise_params["contrast_levels"]:
+    #         for _itrial in range(
+    #             self.params.contrast_practise_params["trials_per_level"]
+    #         ):
+    #             con_prac_trial = DCM_Trial(
+    #                 index=str(f"{block_code}_{trial_indexer}"),
+    #                 window=self.window,
+    #                 data_folder=self.participant.path / block_code,
+    #                 square_size=int(
+    #                     self.params.visual_params["square_size__degrees"]
+    #                     * self.params.px_per_deg
+    #                 ),
+    #                 inter_square_distance=int(
+    #                     self.params.visual_params["inter_square_distance__degrees"]
+    #                     * self.params.px_per_deg
+    #                 ),
+    #                 frame_color=self.params.frame_color,
+    #                 frame_thickness=self.params.visual_params[
+    #                     "frame_thickness__percent"
+    #                 ],
+    #                 fixation_cross_size=int(
+    #                     self.params.visual_params["fixation_cross_size__degrees"]
+    #                     * self.params.px_per_deg
+    #                 ),
+    #                 max_trial_duration=self.params.contrast_practise_params[
+    #                     "max_trial_duration__frames"
+    #                 ],
+    #                 stimulus_source=self.params.stimuli_codes["gabor"],
+    #                 stimulus_duration=self.params.contrast_practise_params[
+    #                     "max_trial_duration__frames"
+    #                 ],
+    #                 stimulus_onset=0,
+    #                 detection_judgement_routine=None,
+    #                 discrimination_judgement_routine=None,
+    #                 termination_buttons=["left", "right"],
+    #                 color_mode=random.choice(["red", "green"]),
+    #                 stimulus_orientation=random.choice(["left", "right"]),
+    #                 contrast_level=contrast_level,
+    #                 red_colors=self.params.red_colors,
+    #                 green_colors=self.params.green_colors,
+    #                 betas=self.betas_fitted,
+    #             )
 
-                con_prac_trial.process_stimuli()
-                con_prac_trial.run()
-                con_prac_trial.save_data()
-                trial_indexer += 1
-
+    #             con_prac_trial.process_stimuli()
+    #             con_prac_trial.run()
+    #             con_prac_trial.save_data()
+    #             trial_indexer += 1
 
     def run_experimental_block(
-        self, block_code, n_trials, contrast_levels, color_modes, detection_collection, discrimination_collection
+        self,
+        block_code : str,
+        n_trials : int,
+        contrast_levels : list,
+        color_modes : list,
+        detection_collection : bool,
+        discrimination_collection : bool,
+        forced_termination_buttons : list | None = None,
+        is_iti_included : bool = True,
+        is_constant_stim : bool = False
     ):
         if len(color_modes) != n_trials:
             raise ValueError(
@@ -149,16 +158,34 @@ class Experiment:
             raise ValueError(
                 "the length of contrast_level specification list is not the same as the number of trials"
             )
-        
+
         if detection_collection is True:
             detection_info = self.params.detection_report_params
         else:
-            detection_info = None 
+            detection_info = None
 
         if discrimination_collection is True:
             discrimination_info = self.params.discrimination_report_params
         else:
-            discrimination_info = None 
+            discrimination_info = None
+
+        # Setting stimulus duration
+        stimulus_duration = None
+        stimulus_onset = None
+        if is_constant_stim:
+            stimulus_duration = self.params.exp_trial_params[
+                    "trial_duration__frames"
+                ]
+            stimulus_onset = 0
+        else:
+            stimulus_duration = self.params.exp_trial_params[
+                    "stimulus_duration__frames"
+                ]
+            stimulus_onset = random.randint(
+                    self.params.exp_trial_params["no_stimulus_interval_front__frames"],
+                    self.params.exp_trial_params["trial_duration__frames"]
+                    - self.params.exp_trial_params["no_stimulus_interval_back__frames"],
+                )
 
         for itrial in range(n_trials):
 
@@ -184,17 +211,11 @@ class Experiment:
                     "trial_duration__frames"
                 ],
                 stimulus_source=self.params.stimuli_codes["gabor"],
-                stimulus_duration=self.params.exp_trial_params[
-                    "stimulus_duration__frames"
-                ],
-                stimulus_onset=random.randint(
-                    self.params.exp_trial_params["no_stimulus_interval_front__frames"],
-                    self.params.exp_trial_params["trial_duration__frames"]
-                    - self.params.exp_trial_params["no_stimulus_interval_back__frames"],
-                ),
+                stimulus_duration=stimulus_duration,
+                stimulus_onset=stimulus_onset,
                 detection_judgement_routine=detection_info,
                 discrimination_judgement_routine=discrimination_info,
-                termination_buttons=None,
+                termination_buttons=forced_termination_buttons,
                 color_mode=color_modes[itrial],
                 stimulus_orientation=random.choice(["left", "right"]),
                 contrast_level=contrast_levels[itrial],
@@ -236,8 +257,9 @@ class Experiment:
             trial.run()
             trial.collect_responses()
             trial.save_data()
-            iti.wait()
-            iti.save_data()
+            if is_iti_included:
+                iti.wait()
+                iti.save_data()
 
     def run_stereo_adaptation_block(self, block_code, n_trials_max):
 
@@ -250,7 +272,7 @@ class Experiment:
             ]
             trial = Stereo_Trial(
                 index=str(f"{block_code}_{itrial}"),
-                stimulus_index = stimulus_direction,
+                stimulus_index=stimulus_direction,
                 window=self.window,
                 data_folder=self.participant.path / block_code,
                 square_size=int(
@@ -287,3 +309,149 @@ class Experiment:
                 if all(progress_tracker[-3:]):
                     break
 
+    def display_text(self, text: str, text_mode: str, termination_buttons: list):
+        if text_mode not in ["fusion", "default"]:
+            raise ValueError("text mode can be either fusion or default")
+
+        stimuli = []
+        if text_mode == "default":
+            text_stim = visual.TextBox2(
+                units="pix",
+                win=self.window,
+                alignment="center",
+                text=text,
+                size=[
+                    self.params.screen_params["resolution_x__px"],
+                    self.params.screen_params["resolution_y__px"],
+                ],
+                letterHeight=int(
+                    0.2
+                    * self.params.visual_params["square_size__degrees"]
+                    * self.params.px_per_deg
+                ),
+                pos=(0, 0),
+                color=self.params.frame_color,
+            )
+            stimuli.append(text_stim)
+        elif text_mode == "fusion":
+            text_builder = Dichoptic_Text(
+                window = self.window, 
+                square_size=int(
+                    self.params.visual_params["square_size__degrees"]
+                    * self.params.px_per_deg
+                ),
+                inter_square_distance=int(
+                    self.params.visual_params["inter_square_distance__degrees"]
+                    * self.params.px_per_deg
+                ),
+                frame_color=self.params.frame_color,
+                frame_thickness=self.params.visual_params["frame_thickness__percent"],
+                fixation_cross_size=int(
+                    self.params.visual_params["fixation_cross_size__degrees"]
+                    * self.params.px_per_deg
+                ),
+                termination_buttons=termination_buttons,
+            )
+            text_builder.process_stimuli(text=text)
+            stimuli = text_builder.stimuli + text_builder.dichoptic_canvas
+
+        while True:
+            for stim in stimuli:
+                stim.draw()
+            self.window.flip()
+            keys_pressed = event.getKeys()
+            if any([button in keys_pressed for button in termination_buttons]):
+                break
+
+    # def run_adapted_staircase(
+    #     self,
+    #     block_code : str,
+    #     n_trials : int,
+    #     # contrast_levels : list,
+    #     # color_modes : list,
+    #     # detection_collection : bool,
+    #     # discrimination_collection : bool,
+    #     # forced_termination_buttons : list | None = None,
+    #     # is_iti_included : bool = True,
+    #     # is_constant_stim : bool = False
+    # ):
+
+    #     for itrial in range(n_trials):
+
+    #         trial = DCM_Trial(
+    #             index=str(f"{block_code}_{itrial}"),
+    #             window=self.window,
+    #             data_folder=self.participant.path / block_code,
+    #             square_size=int(
+    #                 self.params.visual_params["square_size__degrees"]
+    #                 * self.params.px_per_deg
+    #             ),
+    #             inter_square_distance=int(
+    #                 self.params.visual_params["inter_square_distance__degrees"]
+    #                 * self.params.px_per_deg
+    #             ),
+    #             frame_color=self.params.frame_color,
+    #             frame_thickness=self.params.visual_params["frame_thickness__percent"],
+    #             fixation_cross_size=int(
+    #                 self.params.visual_params["fixation_cross_size__degrees"]
+    #                 * self.params.px_per_deg
+    #             ),
+    #             max_trial_duration=self.params.exp_trial_params[
+    #                 "trial_duration__frames"
+    #             ],
+    #             stimulus_source=self.params.stimuli_codes["gabor"],
+    #             stimulus_duration=self.params.exp_trial_params[
+    #                 "stimulus_duration__frames"
+    #             ],
+    #             stimulus_onset=random.randint(
+    #                 self.params.exp_trial_params["no_stimulus_interval_front__frames"],
+    #                 self.params.exp_trial_params["trial_duration__frames"]
+    #                 - self.params.exp_trial_params["no_stimulus_interval_back__frames"],
+    #             ),
+    #             detection_judgement_routine=self.params.detection_report_params,
+    #             discrimination_judgement_routine=None,
+    #             termination_buttons=None,
+    #             color_mode="fusion",
+    #             stimulus_orientation=random.choice(["left", "right"]),
+    #             contrast_level=contrast_levels[itrial],
+    #             red_colors=self.params.red_colors,
+    #             green_colors=self.params.green_colors,
+    #             betas=self.betas_fitted,
+    #         )
+
+    #         iti = Inter_Trial_Interval(
+    #             index=str(f"{block_code}_{itrial}"),
+    #             data_folder=self.participant.path / "inter_trial_intervals",
+    #             window=self.window,
+    #             duration=random.randint(
+    #                 self.params.exp_trial_params[
+    #                     "inter_trial_interval_lower_limit__frames"
+    #                 ],
+    #                 self.params.exp_trial_params[
+    #                     "inter_trial_interval_higher_limit__frames"
+    #                 ],
+    #             ),
+    #             square_size=int(
+    #                 self.params.visual_params["square_size__degrees"]
+    #                 * self.params.px_per_deg
+    #             ),
+    #             inter_square_distance=int(
+    #                 self.params.visual_params["inter_square_distance__degrees"]
+    #                 * self.params.px_per_deg
+    #             ),
+    #             frame_color=self.params.frame_color,
+    #             frame_thickness=self.params.visual_params["frame_thickness__percent"],
+    #             fixation_cross_size=int(
+    #                 self.params.visual_params["fixation_cross_size__degrees"]
+    #                 * self.params.px_per_deg
+    #             ),
+    #         )
+
+    #         ###### block sequence #####
+    #         trial.process_stimuli()
+    #         trial.run()
+    #         trial.collect_responses()
+    #         trial.save_data()
+    #         if is_iti_included:
+    #             iti.wait()
+    #             iti.save_data()
