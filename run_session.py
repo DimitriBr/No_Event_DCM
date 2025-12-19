@@ -2,21 +2,27 @@ from pathlib import Path
 import random
 
 import tkinter as tk
+import numpy as np
 
 from experiment import Experiment
 from misc import Parameters, Participant, get_gui_inputs
 
-# sbj_info = get_gui_inputs(["UEID", "Age", "Gender", "Handedness", "Vision"], "Demographics")
-# sbj = Participant(
-#     sbj_id=sbj_info["UEID"],
-#     age=sbj_info["Age"],
-#     gender=sbj_info["Gender"],
-#     handedness=sbj_info["Handedness"],
-#     vision=sbj_info["Vision"],
-# )
-sbj = Participant(sbj_id="testiq", age=111, gender="f", handedness="a", vision=1) ###temporal line
-sbj.create_participant_repo()
-sbj.save_demographical_info()
+IS_TESTING_REGIME_ON = True 
+
+if IS_TESTING_REGIME_ON:
+    sbj = Participant(
+    sbj_id="test", age=0, gender="X", handedness="X"
+) 
+else:
+    sbj_info = get_gui_inputs(["UEID", "Age", "Gender", "Handedness"], "Demographics")
+    sbj = Participant(
+        sbj_id=sbj_info["UEID"],
+        age=sbj_info["Age"],
+        gender=sbj_info["Gender"],
+        handedness=sbj_info["Handedness"],
+    )
+    sbj.create_participant_repo() 
+    sbj.save_demographical_info()
 
 parameters = Parameters(
     screen_params_file=Path("parameters_screen.json"),
@@ -26,30 +32,45 @@ parameters = Parameters(
     contrast_practise_params_file=Path("parameters_contrast_practise.json"),
     detection_report_params_file=Path("parameters_detection_report.json"),
     discrimination_report_params_file=Path("parameters_discrimination_report.json"),
+    interval_probe_prarms_file=Path("parameters_interval_probe.json"),
     stimuli_codes_file=Path("stimuli_codes.json"),
-    reds_values_file=Path("red_values.xlsx"),
-    green_values_file=Path("green_values.xlsx"),
+)
+exp = Experiment(participant=sbj, params=parameters)
+exp.display_text(
+    "Welcome!", text_mode="default", termination_buttons=["space", "enter"]
+)
+exp.display_text(
+    "Calibration Instructions",
+    text_mode="default",
+    termination_buttons=["space", "enter"],
 )
 
-exp = Experiment(participant=sbj, params=parameters)
-# exp.display_text(
-#     "Welcome!", text_mode="default", termination_buttons=["space", "enter"]
-# )
-# exp.display_text(
-#     "Calibration Instructions",
-#     text_mode="default",
-#     termination_buttons=["space", "enter"],
-# )
-# exp.run_color_contrast_calibration(save_results=True)
+# CALIBRATION BLOCK 
+if IS_TESTING_REGIME_ON:
+    try:
+        exp.load_calibration() 
+    except FileNotFoundError:
+        exp.run_color_contrast_calibration(calibration_type="background", n_calibration_contrasts=15, save_results = True)
+        exp.run_color_contrast_calibration(calibration_type="DCF_colors", n_calibration_contrasts=15, save_results = True)
+    except Exception as e:
+        print(f"Error occured:\n{e}")
+else:
+    exp.run_color_contrast_calibration(calibration_type="background", n_calibration_contrasts=15, save_results = True)
+    exp.run_color_contrast_calibration(calibration_type="DCF_colors", n_calibration_contrasts=15, save_results = True)
+
+
 exp.display_text(
     "Fusion Instruction", text_mode="default", termination_buttons=["space", "enter"]
 )
-exp.run_stereo_adaptation_block(block_code="block_E", n_trials_max=50)
+exp.run_stereo_adaptation_block(block_code="block_E_1", n_trials_max=100)
+exp.display_text("Ready?", text_mode="fusion", termination_buttons=["space", "enter"])
+
 exp.display_text("High Contrast", text_mode="fusion", termination_buttons=["space", "enter"])
+exp.display_text("Ready?", text_mode="fusion", termination_buttons=["space", "enter"])
 exp.run_experimental_block(
     block_code="adaptation_high",
     n_trials=9,
-    contrast_levels=([14] * 3) + ([13] * 3) + ([12] * 3),
+    alphas =([0.2] * 3) + ([0.22] * 3) + ([0.24] * 3),
     color_modes=[random.choice(["red", "green"]) for _i in range(9)],
     detection_collection = False,
     discrimination_collection = False,
@@ -57,11 +78,13 @@ exp.run_experimental_block(
     is_iti_included=False,
     is_constant_stim=True
 )
+
 exp.display_text("Low Contrast", text_mode="fusion", termination_buttons=["space", "enter"])
+exp.display_text("Ready?", text_mode="fusion", termination_buttons=["space", "enter"])
 exp.run_experimental_block(
     block_code="adaptation_low",
     n_trials=9,
-    contrast_levels=([14] * 3) + ([13] * 3) + ([12] * 3),
+    alphas =([0.35] * 3) + ([0.37] * 3) + ([0.39] * 3),
     color_modes=[random.choice(["red", "green"]) for _i in range(9)],
     detection_collection = False,
     discrimination_collection = False,
@@ -69,63 +92,119 @@ exp.run_experimental_block(
     is_iti_included=False,
     is_constant_stim=True
 )
-# exp.run_contrast_adaptation_block(block_code = "adaptation")
 
+# alphas_for_demo = np.linspace(0.26, 0.4, 10)
+# random.shuffle(alphas_for_demo)
+# exp.display_text("Demo Trials Instrucitions", text_mode="fusion", termination_buttons=["space", "enter"])
+# exp.display_text("Ready?", text_mode="fusion", termination_buttons=["space", "enter"])
 # exp.run_experimental_block(
-#     block_code="practise",
-#     n_trials=9,
-#     contrast_levels=([14] * 3) + ([13] * 3) + ([12] * 3),
-#     color_modes=[random.choice(["red", "green"]) for _i in range(9)],
-#     detection_collection = False,
-#     discrimination_collection = True
+#     block_code="adaptation_final_samecolor",
+#     n_trials=10,
+#     alphas = alphas_for_demo,
+#     color_modes=[random.choice(["red", "green"]) for _i in range(10)],
+#     detection_collection = True,
+#     discrimination_collection = True,
+#     forced_termination_buttons=["left", "right"],
+#     is_iti_included=False,
+#     is_constant_stim=False
+# )
+# exp.display_text("Fusion Demo Instrucitions", text_mode="fusion", termination_buttons=["space", "enter"])
+# exp.display_text("Ready?", text_mode="fusion", termination_buttons=["space", "enter"])
+# exp.run_experimental_block(
+#     block_code="adaptation_final_fused",
+#     n_trials=10,
+#     alphas = alphas_for_demo,
+#     color_modes=["fusion" for _i in range(10)],
+#     detection_collection = True,
+#     discrimination_collection = True,
+#     forced_termination_buttons=["left", "right"],
+#     is_iti_included=False,
+#     is_constant_stim=False
 # )
 
-# exp.run_experimental_block(
-#     block_code="block_1",
-#     n_trials=3,
-#     contrast_levels=[7] * 3,
-#     color_modes=["fusion"] * 3,
-# )
-# exp.run_stereo_adaptation_block(block_code="block_E", n_trials_max=50)
+# # SLIDER & STAIRCASE
+exp.display_text("Asjustment\nInstructions", text_mode="fusion", termination_buttons=["space", "enter"])
+exp.display_text("Ready?", text_mode="fusion", termination_buttons=["space", "enter"])
+suggested_alpha = exp.run_adjustment_block(block_code="adjustment", adjustment_buttons=["down", "up"])
+print("Suggested alpha", suggested_alpha)
+exp.display_text("Staircase\nInstructions", text_mode="fusion", termination_buttons=["space", "enter"])
+exp.display_text("Ready?", text_mode="fusion", termination_buttons=["space", "enter"])
+threshold_alpha = exp.run_adapted_staircase(
+    block_code="staircase",
+    n_reversals=5,
+    suggested_alpha=suggested_alpha,
+    alpha_increment=1 / 255,
+    exploration_range = 5/255
+)
+print("Found alpha threshold is", threshold_alpha)
+
+alpha_to_use = threshold_alpha + 0.05*threshold_alpha
+
+# MAIN BLOCK WITH SAME COLOR
+N = 3
+exp.display_text("Resting", text_mode="fusion", termination_buttons=["space", "enter"])
+exp.display_text("Ready?", text_mode="fusion", termination_buttons=["space", "enter"])
+exp.run_stereo_adaptation_block(block_code=f"block_E_pre_simple_block_same_color", n_trials_max=50)
+exp.display_text("Ready?", text_mode="fusion", termination_buttons=["space", "enter"])
+exp.run_experimental_block(
+    block_code=f"simple_block_same_color",
+    n_trials=N,
+    alphas = [alpha_to_use for _i in range(N)],
+    color_modes=[random.choice(["green", "red"]) for _i in range(N)],
+    detection_collection = True,
+    discrimination_collection = True,
+    forced_termination_buttons=None,
+    is_iti_included=False,
+    is_constant_stim=False,
+    hidden_trial_ratio=0.5
+)
+
+## MAIN EXP BLOCK ("SIMPLE BLOCK")
+N_SIMPLE_TRIALS = 3
+if N_SIMPLE_TRIALS%3!=0:
+    raise(ValueError, "Number of trials should divide on the number of the blocks!")
+for iblock in range(3):
+    exp.display_text("Resting", text_mode="fusion", termination_buttons=["space", "enter"])
+    exp.display_text("Ready?", text_mode="fusion", termination_buttons=["space", "enter"])
+    exp.run_stereo_adaptation_block(block_code=f"block_E_pre_simple_block_{iblock}", n_trials_max=50)
+    exp.display_text("Ready?", text_mode="fusion", termination_buttons=["space", "enter"])
+    exp.run_experimental_block(
+        block_code=f"simple_block_{iblock}",
+        n_trials=N_SIMPLE_TRIALS//3,
+        alphas = [alpha_to_use for _i in range(N_SIMPLE_TRIALS//3)],
+        color_modes=["fusion" for _i in range(N_SIMPLE_TRIALS//3)],
+        detection_collection = True,
+        discrimination_collection = True,
+        forced_termination_buttons=None,
+        is_iti_included=False,
+        is_constant_stim=False,
+        hidden_trial_ratio=0.5
+    )
 
 
-#
-#
-# add full trial, but same color
+N_2IFC_TRIALS = 3
+if N_2IFC_TRIALS%3!=0:
+    raise(ValueError, "Number of trials should divide on the number of the blocks!")
+exp.display_text("Resting", text_mode="fusion", termination_buttons=["space", "enter"])
+for iblock in range(3):
+    exp.display_text("Resting", text_mode="fusion", termination_buttons=["space", "enter"])
+    exp.display_text("Ready?", text_mode="fusion", termination_buttons=["space", "enter"])
+    exp.run_stereo_adaptation_block(block_code=f"block_E_pre_2IFC_block_{iblock}", n_trials_max=50)
+    exp.display_text("Ready?", text_mode="fusion", termination_buttons=["space", "enter"])
+    exp.run_2I2AFC_block(
+        block_code = f"2IFC_block_{iblock}",
+        n_trials = N_2IFC_TRIALS//3, 
+        alphas = [alpha_to_use for _i in range(N_2IFC_TRIALS//3)],
+        color_modes=["fusion" for _i in range(N_2IFC_TRIALS//3)],
+        detection_collection = True,
+        discrimination_collection = False,
+        forced_termination_buttons=None,
+        is_iti_included=False,
+        is_constant_stim=False,
+    )
 
-# add staircase
-# instead of termination by "left", "right" --> trial lasts until max duration is over, and then TWO responses
-
-# when we split the screen, we ALWAYS have square frames and fixation cross
-
-# duration of the trial: 5-6 seconds
-# for appearence of the stimuli, uniform within the trial expept the first and the last
-# 15% (or 50%?) of the trials - there really is nothing (or what is the minimum percent of blanks so that we can compute d-prime)
-
-# contrast-to-be-used -- one staircase step down from the point of convergence
-# two-interval (5 seconds) two-alternative forced choice in the second block
+exp.display_text("Fin", text_mode="fusion", termination_buttons=["space", "enter"])
 
 
-# 0. Fill demographical info --U
-# 1. Welcome text --U
-# 2. Calibration Instucture text --U
-# 3. Color Calibration --U
-# 4. Fusion Instruction --U
-# 5. Stereo-E block (untill 3 successes in a row) --M
-# 6. Adaptation (same color, high contrast) with no report
-# 7. Adaptation (same color, low contrast) with no report
-# 8. Adaptation (same color, different constasts) with reports,
-# 9. Instructions for Slider + Staircase
-# 10. SLider with contrast "find the lowest where it's visible" --M
-# 11. Double-Staircase with a small step size in the area of the lowest visibility report from slider
-# 12. Rest (self-paced)
-# 13. Stereo-E block
-# 14. Simlex Experimental Block (gabor orientation judgement; 50% we have nothing) -- 45 stimuli + 45 empty (?)
-# ### --> if waiting_time > 15 sec:
-# ### ### Stereo_E block before the next trial
-# 15. Rest (self-pasced)
-# 16. Stereo-E block
-# 17. Complex Experimental Block (2-interval 2-alternative forced choice trials; ?) - 45 + 45 (?)
-# ### --> if waiting_time > 15 sec:
-# ### ### Stereo_E block before the next trial
-# 18. Thank-you Message
+
+

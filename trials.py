@@ -73,7 +73,7 @@ class Dichoptic_Trial(ABC):
             self.detection_response_button_pressed = "No_Pressed_Button"  # default
             self.detection_report = "No_Report_Made"  # default
 
-        self.discrimination_report = None 
+        self.discrimination_report = None
         if discrimination_judgement_routine is not None:
             self.discrimination_params = discrimination_judgement_routine
             self.discrimination_report_button_pressed = "No_Pressed_Button"
@@ -81,27 +81,36 @@ class Dichoptic_Trial(ABC):
 
         self.info = {}
         self.info["trial_id"] = index
-        self.info["terminated_by"] = "time_out"  # default trial termination
+        self.info["terminated_by"] = "time_out"
 
-    def run(self):
+    def run(self, hide_stimulus: bool = False):
         event.clearEvents(eventType="keyboard")
 
         frame_mapping = {iframe: None for iframe in range(self.max_trial_duration)}
 
-        # inserting stimuli to canvas for the relevant frames
-        frame_visual_stimuli_off = self.supporting_visuals + self.dichoptic_canvas
-        frame_visual_stimuli_on = (
-            self.supporting_visuals + self.stimuli + self.dichoptic_canvas
-        )
+        if not hide_stimulus:
+            self.info["stimulus_type"] = "gabor"
+            # inserting stimuli to canvas for the relevant frames
+            frame_visual_stimuli_off = self.supporting_visuals + self.dichoptic_canvas
+            frame_visual_stimuli_on = (
+                self.supporting_visuals + self.stimuli + self.dichoptic_canvas
+            )
 
-        for iframe in range(self.max_trial_duration):
-            # frame_visual_stimuli_on[-2:-2] = copy(self.stimuli)
-            if (iframe > self.stimulus_onset) and (
-                iframe < (self.stimulus_onset + self.stimulus_duration)
-            ):
-                frame_mapping[iframe] = frame_visual_stimuli_on
-            else:
-                frame_mapping[iframe] = frame_visual_stimuli_off
+            for iframe in range(self.max_trial_duration):
+                # frame_visual_stimuli_on[-2:-2] = copy(self.stimuli)
+                if (iframe > self.stimulus_onset) and (
+                    iframe < (self.stimulus_onset + self.stimulus_duration)
+                ):
+                    frame_mapping[iframe] = frame_visual_stimuli_on
+                else:
+                    frame_mapping[iframe] = frame_visual_stimuli_off
+
+        elif hide_stimulus:
+            self.info["stimulus_type"] = "empty"
+            frame_mapping = {
+                iframe: (self.supporting_visuals + self.dichoptic_canvas)
+                for iframe in range(self.max_trial_duration)
+            }
 
         last_frame = self.max_trial_duration
         for iframe in range(last_frame):
@@ -114,7 +123,15 @@ class Dichoptic_Trial(ABC):
                 if any([button in keys_pressed for button in self.termination_buttons]):
                     self.info["terminated_by"] = keys_pressed[0]
                     last_frame = iframe + 1
-                    frame_mapping[last_frame] = self.supporting_visuals + self.stimuli + [obj for iobj, obj in enumerate(self.dichoptic_canvas) if iobj%2==0]
+                    frame_mapping[last_frame] = (
+                        self.supporting_visuals
+                        + self.stimuli
+                        + [
+                            obj
+                            for iobj, obj in enumerate(self.dichoptic_canvas)
+                            if iobj % 2 == 0
+                        ]
+                    )
             if iframe == last_frame:
                 break
         self.info["terminated_at"] = last_frame
@@ -123,6 +140,9 @@ class Dichoptic_Trial(ABC):
         self.data_folder.mkdir(exist_ok=True)
         with open((self.data_folder / f"{self.index}.json"), "w") as f:
             json.dump(self.info, f, indent=4)
+
+    def get_data(self):
+        return self.info
 
     @abstractmethod
     def process_stimuli(self):
@@ -153,10 +173,9 @@ class DCM_Trial(Dichoptic_Trial):
         termination_buttons: list | None,
         color_mode: str,
         stimulus_orientation: str,
-        contrast_level: int,
-        red_colors: pd.DataFrame,
-        green_colors: pd.DataFrame,
-        betas: dict,
+        gamma: float,
+        alpha: float,
+        beta_polynomial: np.poly1d,
     ):
         super().__init__(
             index,
@@ -184,57 +203,34 @@ class DCM_Trial(Dichoptic_Trial):
             self.ori = 45
         elif stimulus_orientation == "right":
             self.ori = 135
+        elif stimulus_orientation == "original":
+            self.ori = 0
         else:
             raise ValueError("Oritentation can be either left or right")
 
-        beta = betas[contrast_level]
-        red_color = colors.Color(
-            np.array(red_colors.loc[contrast_level, :]), space="rgb1"
-        )
-        green_color = colors.Color(
-            beta * np.array(green_colors.loc[contrast_level, :]), space="rgb1"
-        )
+        if (gamma < alpha) or (gamma < 0) or (alpha < 0) or (gamma > 1) or (alpha > 1):
+            raise ValueError(
+                "gamma and alpha parameters should be floats from 0 to 1 (alpha < gamma)"
+            )
+
+        beta = beta_polynomial(alpha)
+        red_color = colors.Color(np.array([gamma, alpha, 0]), space="rgb1")
+        green_color = colors.Color(beta * np.array([alpha, gamma, 0]), space="rgb1")
         self.colors = {"red": red_color, "green": green_color}
 
+        self.beta_polynomial = beta_polynomial
+        self.alpha = alpha
+        self.gamma = gamma
         self.info["color_mode"] = color_mode
         self.info["stimulus_orientation"] = stimulus_orientation
-        self.info["contrast"] = contrast_level
-
-    def _generate_gaborlike_texture(self):
-        sin_waves = [
-            [
-                (np.sin(val) + 1) / 2
-                for val in np.linspace(-np.pi, np.pi, self.grating_res)
-            ],
-            [
-                (np.sin(val) + 1) / 2
-                for val in np.linspace(np.pi, -np.pi, self.grating_res)
-            ],
-        ]
-
-        random.shuffle(sin_waves)
-
-        red_space__rgb = [
-            (val * np.abs(self.red_color.rgb[0] - self.green_color.rgb[0]))
-            + np.min([self.red_color.rgb[0], self.green_color.rgb[0]])
-            for val in sin_waves[0]
-        ]
-        green_space__rgb = [
-            (val * np.abs(self.red_color.rgb[1] - self.green_color.rgb[1]))
-            + np.min([self.red_color.rgb[1], self.green_color.rgb[1]])
-            for val in sin_waves[1]
-        ]
-
-        one_cycle_grating = np.ones((self.grating_res, self.grating_res, 3))
-        for i in range(self.grating_res):
-            one_cycle_grating[:, i] = [green_space__rgb[i], red_space__rgb[i], -1]
-
-        texture = one_cycle_grating
-        return texture
+        self.info["alpha"] = alpha
+        self.info["beta"] = beta
+        self.info["gamma"] = gamma
 
     def _get_individual_response(
-        self, response_params: dict, is_mapping_to_shuffle: bool
+        self, response_params: dict
     ) -> tuple[str, str]:
+        is_mapping_to_shuffle = response_params["is_mapping_to_shuffle__boolean"]
         is_response_made = False
 
         labels = copy(response_params["response_labels"])
@@ -369,8 +365,7 @@ class DCM_Trial(Dichoptic_Trial):
         if self.detection_report == "No_Report_Made":
             detection_response_button_pressed, detection_response = (
                 self._get_individual_response(
-                    response_params=copy(self.detection_params),
-                    is_mapping_to_shuffle=True,
+                    response_params=copy(self.detection_params)
                 )
             )
             self.info["detection_response_button_pressed"] = (
@@ -383,8 +378,7 @@ class DCM_Trial(Dichoptic_Trial):
         if self.discrimination_report == "No_Report_Made":
             discrimination_response_button_pressed, discrimination_response = (
                 self._get_individual_response(
-                    response_params=copy(self.discrimination_params),
-                    is_mapping_to_shuffle=True,
+                    response_params=copy(self.discrimination_params)
                 )
             )
             self.info["discrimination_response_button_pressed"] = (
@@ -394,6 +388,17 @@ class DCM_Trial(Dichoptic_Trial):
         else:
             pass
 
+    def collect_interval_response(self, interval_probe_params):
+        ''' needed for 2IFC'''
+        interval_button_pressed, interval_response = (
+                self._get_individual_response(
+                    response_params=interval_probe_params
+                )
+            )
+        self.info["interval_response_button_pressed"] = (
+            interval_button_pressed
+        )
+        self.info["interval_response"] = interval_response
 
 class Stereo_Trial(Dichoptic_Trial):
     def __init__(
@@ -555,6 +560,7 @@ def generate_dichoptic_canvas(
         dichoptic_canvas.append(fixation_cross)
     return dichoptic_canvas
 
+
 class Dichoptic_Text(Dichoptic_Trial):
     def __init__(
         self,
@@ -567,21 +573,21 @@ class Dichoptic_Text(Dichoptic_Trial):
         termination_buttons: list,
     ):
         super().__init__(
-            index = None,
-            window = window,
-            data_folder = None,
-            square_size = square_size,
+            index=None,
+            window=window,
+            data_folder=None,
+            square_size=square_size,
             inter_square_distance=inter_square_distance,
             frame_color=frame_color,
             frame_thickness=frame_thickness,
             fixation_cross_size=fixation_cross_size,
-            max_trial_duration = 9999,
-            stimulus_source = None,
-            stimulus_duration = None,
-            stimulus_onset = None,
-            detection_judgement_routine = None,
-            discrimination_judgement_routine = None,
-            termination_buttons = termination_buttons,
+            max_trial_duration=9999,
+            stimulus_source=None,
+            stimulus_duration=None,
+            stimulus_onset=None,
+            detection_judgement_routine=None,
+            discrimination_judgement_routine=None,
+            termination_buttons=termination_buttons,
         )
 
     def process_stimuli(self, text):
@@ -598,18 +604,250 @@ class Dichoptic_Text(Dichoptic_Trial):
         }
 
         for side in ["left", "right"]:
-            question_icon = visual.TextBox2(
-                    units="pix",
-                    win=self.window,
-                    alignment="center",
-                    text=text,
-                    letterHeight=int(self.square_size / 8),
-                    pos=upper_square_lining_positions[side],
-                    color=self.frame_color,
-                )
-            self.stimuli.append(question_icon)
-        
+            text_stim = visual.TextBox2(
+                units="pix",
+                win=self.window,
+                size=[self.square_size, self.square_size],
+                alignment="center",
+                text=text,
+                letterHeight=int(self.square_size / 8),
+                pos=upper_square_lining_positions[side],
+                color=self.frame_color,
+            )
+            self.stimuli.append(text_stim)
 
     def collect_responses(self):
         pass
 
+
+class Dichoptic_Slider(Dichoptic_Trial):
+    def __init__(
+        self,
+        scale: list,
+        current_value: float,
+        window: visual.Window,
+        square_size: int,
+        inter_square_distance: int,
+        frame_color: colors.Color,
+        frame_thickness: float,
+        fixation_cross_size: int,
+        termination_buttons: list,
+        block_finish_buttons: list,
+        increase_buttons: list,
+        decrease_buttons: list,
+    ):
+        super().__init__(
+            index=None,
+            window=window,
+            data_folder=None,
+            square_size=square_size,
+            inter_square_distance=inter_square_distance,
+            frame_color=frame_color,
+            frame_thickness=frame_thickness,
+            fixation_cross_size=fixation_cross_size,
+            max_trial_duration=9999,
+            stimulus_source=None,
+            stimulus_duration=None,
+            stimulus_onset=None,
+            detection_judgement_routine=None,
+            discrimination_judgement_routine=None,
+            termination_buttons=termination_buttons,
+        )
+        self.scale = scale
+        self.current_value = current_value
+        self.block_finish_buttons = block_finish_buttons
+        self.increase_buttons = increase_buttons
+        self.decrease_buttons = decrease_buttons
+        self.slider_main = None
+        self.slider_duplicate = None
+
+        self.info["block_finish_called"] = "no"
+
+    def process_stimuli(self):
+        upper_square_lining_positions = {
+            "left": (
+                -int(self.inter_square_distance / 2 + self.square_size / 2),
+                int(self.square_size / 4),
+            ),
+            "right": (
+                int(self.inter_square_distance / 2 + self.square_size / 2),
+                int(self.square_size / 4),
+            ),
+        }
+        lower_square_lining_positions = {
+            "left": (
+                -int(self.inter_square_distance / 2 + self.square_size / 2),
+                -int(self.square_size / 2),
+            ),
+            "right": (
+                int(self.inter_square_distance / 2 + self.square_size / 2),
+                -int(self.square_size / 2),
+            ),
+        }
+
+        for side in ["left", "right"]:
+            question_icon = visual.TextBox2(
+                units="pix",
+                win=self.window,
+                alignment="center",
+                text="use o and m to adjust"
+                + "\n"
+                + "use space to contunie"
+                + "\n"
+                + "use q to confirm current",
+                letterHeight=int(self.square_size / 12),
+                pos=upper_square_lining_positions[side],
+                size=[int(self.square_size), int(self.square_size / 8)],
+                color=self.frame_color,
+            )
+            self.stimuli.append(question_icon)
+
+            slider = visual.Slider(
+                units="pix",
+                win=self.window,
+                ticks=np.linspace(
+                    start=self.scale[0], stop=self.scale[1], num=7, endpoint=True
+                ),
+                labels=[
+                    str(int(label))
+                    for ilabel, label in enumerate(
+                        np.linspace(
+                            start=self.scale[0],
+                            stop=self.scale[1],
+                            num=7,
+                            endpoint=True,
+                        )
+                    )
+                    if ilabel % 2 == 0
+                ],
+                startValue=self.current_value,
+                pos=lower_square_lining_positions[side],
+                size=[self.square_size, self.square_size / 8],
+                style="rating",
+                labelHeight=self.square_size / 12,
+                labelWrapWidth=None,
+                color=self.frame_color,
+                lineColor=self.frame_color,
+                font="Courier New",
+                styleTweaks=["triangleMarker"],
+            )
+            if side == "left":
+                self.slider_main = slider
+            elif side == "right":
+                self.slider_duplicate = slider
+
+    def run(self) -> float:
+        event.clearEvents(eventType="keyboard")
+        block_finish_called = False
+        while True:
+            for visual_object in self.stimuli + self.dichoptic_canvas:
+                visual_object.draw()
+
+                if self.slider_main.markerPos != self.slider_duplicate.markerPos:
+                    self.slider_duplicate.markerPos = self.slider_main.markerPos
+                self.slider_main.draw()
+                self.slider_duplicate.draw()
+
+            self.window.flip()
+
+            if self.termination_buttons is None:
+                raise ValueError("Dichoptic Slider termination buttons cannot be None")
+
+            keys = event.getKeys()
+            event.clearEvents()
+            if len(keys) > 0:
+                key_pressed = keys[-1]
+                if key_pressed in self.termination_buttons:
+                    break
+                elif key_pressed in self.block_finish_buttons:
+                    self.info["block_finish_called"] = "yes"
+                    break
+                elif key_pressed in self.increase_buttons:
+                    self.slider_main.markerPos += 0.25
+                elif key_pressed in self.decrease_buttons:
+                    self.slider_main.markerPos -= 0.25
+
+        return self.slider_main.markerPos
+
+    def collect_responses(self):
+        pass
+
+class Adjustment_DCM_Trial(DCM_Trial):
+
+    def _adjust_processed_stimuli(self, seed):
+        self.supporting_visuals = []
+        self.stimuli = []
+        random.seed(seed)
+        self.process_stimuli()
+
+    def _adjust_background_color(self, alpha, kappa_polynomial):
+        kappa = kappa_polynomial(alpha)
+        gamma = self.gamma
+        background_color = colors.Color(kappa * np.array([gamma, gamma, gamma]), space="rgb1")
+        self.window.setColor(background_color)
+
+
+    def run(self, adjustment_buttons: list, adjustment_value : int, kappa_polynomial) -> float:
+        SEED = 2025
+
+        self._adjust_processed_stimuli(seed = SEED)
+        self._adjust_background_color(alpha = self.alpha, kappa_polynomial=kappa_polynomial)
+        event.clearEvents(eventType="keyboard")
+        if self.termination_buttons is None:
+            raise ("Adjustment Trial cannot be run without termination button(s)")
+        if type(adjustment_buttons) is not list or len(adjustment_buttons) != 2:
+            raise ("adjustment buttons should be list of length 2")
+
+        last_frame = self.max_trial_duration
+        alpha = None
+        for iframe in range(last_frame):
+
+            keys_pressed = event.getKeys()
+            # termination check and routine
+            if any([button in keys_pressed for button in self.termination_buttons]):
+                self.info["terminated_by"] = keys_pressed[0]
+                break
+            # adjustment check and routine
+            if any([button in keys_pressed for button in adjustment_buttons]):
+                old_alpha = copy(self.alpha)
+                # color adjustment:
+                if keys_pressed[0] == adjustment_buttons[0]:
+                    alpha = old_alpha + adjustment_value
+                elif keys_pressed[0] == adjustment_buttons[1]:
+                    alpha = old_alpha - adjustment_value
+                    
+                if alpha >= self.gamma:
+                    alpha = self.gamma
+                if alpha <=0:
+                    alpha = 0
+
+                beta = self.beta_polynomial(alpha)
+                red_color_adj = colors.Color(
+                    np.array([self.gamma, alpha, 0]), space="rgb1"
+                )
+                green_color_adj = colors.Color(
+                    beta * np.array([alpha, self.gamma, 0]), space="rgb1"
+                )
+
+                self.colors = {"red": red_color_adj, "green": green_color_adj}
+                self.alpha = alpha
+
+                self._adjust_background_color(alpha = alpha, kappa_polynomial=kappa_polynomial)
+                self._adjust_processed_stimuli(seed = SEED)
+
+            if (iframe//8)%2 == 0:
+                for visual_object in (self.supporting_visuals + self.stimuli + self.dichoptic_canvas):
+                    visual_object.draw()
+            else:
+                for visual_object in (self.supporting_visuals + self.dichoptic_canvas):
+                    visual_object.draw()
+
+            if iframe == last_frame:
+                break
+            self.window.flip()
+
+        self.info["terminated_at"] = last_frame
+        self.info["final_alpha"] = alpha
+        random.seed(None)
+
+        return alpha

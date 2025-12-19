@@ -1,5 +1,6 @@
 {
     "question_icon_text" : "L or R?",
-    "response_buttons" : ["o", "m"],
-    "response_labels" : ["left", "right"]
+    "response_buttons" : ["left", "right"],
+    "response_labels" : ["L", "R"],
+    "is_mapping_to_shuffle__boolean" : 0
 }

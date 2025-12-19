@@ -3,6 +3,7 @@
     "square_size__degrees" : 3,
     "frame_thickness__percent" : 1.5,
     "fixation_cross_size__degrees" : 0.5,
-    "background_rgb1" : [0, 0, 0.4],
-    "frame_rgb1" : [1, 1, 1]
+    "background_0_rgb1" : [0.2, 0.2, 0.2],
+    "frame_rgb1" : [0, 0, 0],
+    "full_saturation_value" : 0.40
 }

@@ -41,14 +41,15 @@ def prepare_image(
         canvas.paste(img, offset)
         canvas = canvas.rotate(ori, expand = False, fillcolor = 255)
     elif ori is None:
+        img = img.resize((m, m), Image.Resampling.LANCZOS)
         canvas = img
 
-    blur_radius = round(m/100)
+    blur_radius = round(m/20)
     filter_for_blurring = ImageFilter.GaussianBlur(blur_radius)
     canvas = canvas.filter(filter_for_blurring)
 
     bw = canvas.convert("1")  # dithering
-    print("A", bw.size)
+    #print("A", bw.size)
 
     red_bg_image = ImageOps.colorize(
         bw.convert("L"),
@@ -78,5 +79,3 @@ if __name__ == "__main__":
         green_rgb255=(110, 150, 0),
         ori = 0
     )
-
-#blur radius should be one 

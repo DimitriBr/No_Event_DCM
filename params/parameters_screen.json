@@ -1,8 +1,8 @@
 {
     "distance_to_screen__cm" : 75,
-    "resolution_x__px" : 1536,
-    "resolution_y__px" : 864, 
-    "screen_width__cm" : 35.5,
-    "screen_height__cm" : 20,
+    "resolution_x__px" : 1920,
+    "resolution_y__px" : 1080, 
+    "screen_width__cm" : 54.5,
+    "screen_height__cm" : 30,
     "refresh_rate__hz" : 60
 }

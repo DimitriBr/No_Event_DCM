@@ -1,6 +1,6 @@
 {
-    "question_icon_text" : "Seen?",
+    "question_icon_text" : "Which Interval?",
     "response_buttons" : ["left", "right"],
-    "response_labels" : ["yes", "no"],
+    "response_labels" : ["I", "II"],
     "is_mapping_to_shuffle__boolean" : 0
 }
