@@ -1,8 +1,6 @@
 # Project Name
 
-No_Event_Dichoptic_Color_Masking
-
-**work in progress**
+No_Event_Dichoptic_Color_Masking (**work in progress**)
 
 ## Requirements
 
