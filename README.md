@@ -9,7 +9,13 @@ Windows 10 or Windows 11
 ## Installation
 
 To run the stimuli code, you may re-create the environment `psych` from the `psych.yml` file included in this project.
-In this case, you could run `conda env create -f environment.yml` in your terminal
+In this case, psychopy (2023.2.3) with no dependecies should be manually added to the environment from pip due to compatibility issues.
+
+For this, run the following commands in your terminal:
+
+1) `conda env create -f psych.yml` 
+2) `activate psych`
+3) `pip install psychopy=2023.2.3 --no-deps`
 
 Further important steps on how to launch the stimuli code:
 
