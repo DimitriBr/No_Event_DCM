@@ -15,7 +15,7 @@ For this, run the following commands in your terminal:
 
 1) `conda env create -f psych.yml` 
 2) `activate psych`
-3) `pip install psychopy=2023.2.3 --no-deps`
+3) `pip install psychopy==2023.2.3 --no-deps`
 
 Further important steps on how to launch the stimuli code:
 
