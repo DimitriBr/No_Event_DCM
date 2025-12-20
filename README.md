@@ -28,6 +28,8 @@ Further important steps on how to launch the stimuli code:
 
 ## Current Experiment Structure
 
+Current Structure of the experiment from the `run_session.py`
+
 1. Demographical Info Filling
 2. Welcome text
 3. Calibration Instruction text
