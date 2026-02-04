@@ -8,9 +8,8 @@ import matplotlib
 import pandas as pd
 import matplotlib.pyplot as plt
 import tkinter as tk
-from tkinter import messagebox
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from psychopy import visual, event, colors
+from psychopy import visual, event, colors, core
 import numpy as np
 
 
@@ -121,112 +120,135 @@ class Parameters:
 
 class Calibrator:
     """
-    color luminance calibration
-    color A: reference luminance (lower)
-    color B: luminance adjusted by multiplier < 1
+    Color luminance calibration.
+    A: reference color (e.g., red)
+    B: adjustable color (e.g., green) scaled by beta<1
     """
 
     def __init__(
         self,
         window: visual.Window,
         refresh_rate: int,
-        mouse: event.Mouse,
-        beta_0: int,
-        beta_increment: int,
+        mouse : event.Mouse,
+        beta_0: float,
+        beta_increment: float,
         calibration_type: str,
-        A_color_rgb1: list,
-        B_color_rgb1: list,
+        A_color_rgb1,
+        B_color_rgb1,
         field_size: int,
-        background_color: colors.Color,
+        background_color,
+        flicker_hz: float = 15.0,
     ):
         self.window = window
         self.refresh_rate = refresh_rate
-        self.mouse = mouse
         self.beta_0 = beta_0
         self.beta_increment = beta_increment
         self.calibration_type = calibration_type
-        self.A_color_vals_0 = A_color_rgb1
-        self.B_color_vals_0 = B_color_rgb1
+        self.A_color_0 = A_color_rgb1
+        self.B_color_0 = B_color_rgb1
         self.field_size = field_size
         self.window.color = background_color
+        self.flicker_hz = flicker_hz
 
-        if calibration_type not in ["checkerboard", "single_square"]:
-            raise ValueError(
-                "Calibration is defined only for 'checkerboard' or 'single_square' types"
-            )
-        if refresh_rate % (15 * 2) != 0:
-            raise ValueError("Refresh rate of the screen should be a multiple of 30")
+        if calibration_type != "checkerboard":
+            raise ValueError(f"Calibration type {calibration_type} is not defined")
 
-    def _get_checkerboard(self, color_list):
-        squares = []
+        frames_per_half = int(round(self.refresh_rate / (2 * self.flicker_hz)))  # full cycle is 2 half-phases 
+        self.frames_per_half = max(1, frames_per_half)
 
-        q = int(self.field_size / 6)  # scaler
+        self._build_checkerboard_stim()
 
-        color_i = 0
-        for x in np.linspace(-2.5, 2.5, 6):
-            for y in np.linspace(-2.5, 2.5, 6):
-                square = visual.Rect(
-                    units="pix",
-                    win=self.window,
-                    width=int(q / 1.05),
-                    height=int(q / 1.05),
-                    pos=(x * q, y * q),
-                    fillColor=color_list[color_i],
-                )
-                squares.append(square)
-                color_i += 1
-        
-        return squares
+    def _build_checkerboard_stim(self):
+        '''
+        building 6x6 grid
+        ''' 
+
+        q = int(self.field_size / 6)  # spacing scaler
+
+        xs = np.linspace(-2.5, 2.5, 6) * q
+        ys = np.linspace(-2.5, 2.5, 6) * q
+
+        pos_list = [(x, y) for x in xs for y in ys]
+        self.pos = np.array(pos_list, dtype=float)
+
+        size = int(q / 1.05) #size of each square (less than q so there's some space between squares)
+
+        self.stim = visual.ElementArrayStim(
+            win=self.window,
+            units="pix",
+            nElements=36,
+            elementTex=None,  # solid squares by default
+            elementMask=None,
+            xys=self.pos,
+            sizes=size,
+            colors=np.zeros((36, 3), dtype=float),  # will be set per-frame
+            colorSpace="rgb1",
+        )
+
+        # checheboard layout
+        n = 6
+        rows, cols = np.indices((n, n))     
+        checker = ((rows + cols) % 2 == 0).ravel() 
+
+        self.B_idx_even = checker
+        self.B_idx_odd  = ~checker
+
 
     def run_calibration_trial(self) -> float:
-        beta = self.beta_0
-        A_color_vals = copy.copy(self.A_color_vals_0)
-        B_color_vals = copy.copy(self.B_color_vals_0)
-        B_color_vals.rgb1 = self.B_color_vals_0.rgb1 * beta
+        beta = float(self.beta_0)
+
+        A = copy.copy(self.A_color_0)
+        B0 = copy.copy(self.B_color_0)
+
+        # making sure that we further work with numpy arrays
+        A_rgb = np.array(getattr(A, "rgb1", A), dtype=float)
+        B_base_rgb = np.array(getattr(B0, "rgb1", B0), dtype=float)
+
+        # Build two color buffers (even/odd) once; update only B entries on keypress
+        colors_for_even_frame = np.empty((36, 3), dtype=float)
+        colors_for_odd_frame  = np.empty((36, 3), dtype=float)
+
+        # init as As
+        colors_for_even_frame[:] = A_rgb
+        colors_for_odd_frame[:]  = A_rgb
+
+        # fill with Bs when needed 
+        B_rgb = B_base_rgb * beta #B is updated by beta
+        colors_for_even_frame[self.B_idx_even] = B_rgb
+        colors_for_odd_frame[self.B_idx_odd]   = B_rgb
 
         event.clearEvents(eventType="keyboard")
 
-        if self.calibration_type == "checkerboard":
-            color_list_even = (
-                [B_color_vals, A_color_vals] * 3
-                + [A_color_vals, B_color_vals] * 3
-            ) * 3
-            color_list_odd = (
-                [A_color_vals, B_color_vals] * 3
-                + [B_color_vals, A_color_vals] * 3
-            ) * 3
-            colors = [color_list_even,  color_list_odd]
-            boards = [self._get_checkerboard(color) for color in colors]
-            #print("before", B_color_vals)
+        core.rush(True)
+        frame = 0
+        while True:
+            # toggle every frames_per_half frames
+            phase = (frame // self.frames_per_half) % 2
+            self.stim.colors = (colors_for_even_frame if phase == 0 else colors_for_odd_frame)
 
-            i_frame = -1
-            while True:
-                i_frame += 1
-                board = boards[(i_frame % 4)//2]
+            self.stim.draw()
+            self.window.flip()
+            frame += 1
 
-                for obj in board:
-                    obj.draw()
-                self.window.flip()
+            keys = event.getKeys()
+            if not keys:
+                continue
 
-                current_keys = event.getKeys()
-                if len(current_keys) > 0:
-                    print("PRESSED", current_keys)
-                    if "up" in current_keys:
-                        beta += self.beta_increment
-                    elif "down" in current_keys:
-                        beta -= self.beta_increment 
-                    elif "space" in current_keys:
-                        break
+            if "up" in keys:
+                beta += self.beta_increment
+            elif "down" in keys:
+                beta -= self.beta_increment
+            elif "space" in keys:
+                break
 
-                    B_color_vals.rgb1 = self.B_color_vals_0.rgb1 * beta
-                    for board in boards:
-                        green_squares = [obj for obj in board if obj.fillColor[0] < obj.fillColor[1]]
-                        for obj in green_squares:
-                            obj.setColor(B_color_vals)
-                        #print("posle", obj.fillColor)           
+            # update B color only (fast)
+            B_rgb = B_base_rgb * beta
+            colors_for_even_frame[self.B_idx_even] = B_rgb
+            colors_for_odd_frame[self.B_idx_odd]   = B_rgb
+
+        core.rush(False)
 
         return beta
-
 
 def check_beta_plot(
     window: visual.Window,
@@ -299,6 +321,7 @@ def check_beta_plot(
         for i in range(2)
     ]
 
+    window.mouseVisible = True
     mouse.setExclusive(False)
     while not is_judgement_made:
         plot.draw()
@@ -308,8 +331,9 @@ def check_beta_plot(
             if mouse.isPressedIn(shape=button, buttons=[0]):
                 button_pressed_index = ibutton
                 is_judgement_made = True
-
         window.flip()
+
+    window.mouseVisible = True
     mouse.setExclusive(True)
 
     if button_pressed_index == 0:

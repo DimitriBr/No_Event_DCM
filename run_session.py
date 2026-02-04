@@ -1,13 +1,15 @@
 from pathlib import Path
 import random
+import os
 
 import tkinter as tk
 import numpy as np
+from psychopy import event
 
 from experiment import Experiment
 from misc import Parameters, Participant, get_gui_inputs
 
-IS_TESTING_REGIME_ON = True 
+IS_TESTING_REGIME_ON = False
 
 if IS_TESTING_REGIME_ON:
     sbj = Participant(
@@ -35,10 +37,15 @@ parameters = Parameters(
     interval_probe_prarms_file=Path("parameters_interval_probe.json"),
     stimuli_codes_file=Path("stimuli_codes.json"),
 )
+
 exp = Experiment(participant=sbj, params=parameters)
 exp.display_text(
     "Welcome!", text_mode="default", termination_buttons=["space", "enter"]
 )
+
+event.globalKeys.clear()
+event.globalKeys.add("q", modifiers = ['ctrl'], func = os._exit, func_args = [0])
+
 exp.display_text(
     "Calibration Instructions",
     text_mode="default",
